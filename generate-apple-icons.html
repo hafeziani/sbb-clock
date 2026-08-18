@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apple Touch Icon Generator — SBB Clock</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #151515;
+    --border: #2a2a2a;
+    --text: #e8e8e8;
+    --muted: #8a8a8a;
+    --accent: #eb0000;
+    --accent-hover: #ff1a1a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "SF Pro Text", Segoe UI, Roboto, sans-serif;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px 16px;
+  }
+  .wrap { width: 100%; max-width: 560px; }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 28px;
+    line-height: 1.5;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .row { display: flex; gap: 16px; margin-bottom: 16px; }
+  .row:last-child { margin-bottom: 0; }
+  .field { flex: 1; }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  input[type="color"] {
+    width: 100%;
+    height: 36px;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .sizes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .size-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .size-chip input { margin: 0; }
+  #drop {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  #drop.drag { border-color: var(--accent); color: var(--text); }
+  #svgFile { display: none; }
+  .preview-row { display: flex; align-items: center; gap: 20px; margin-top: 16px; }
+  #previewCanvas {
+    width: 96px; height: 96px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+  .preview-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  button {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { background: #3a3a3a; color: var(--muted); cursor: default; }
+  .status { font-size: 12px; color: var(--muted); margin-top: 10px; min-height: 16px; }
+  .filenames { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.7; }
+  .filenames code { color: var(--text); background: #000; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Apple Touch Icon Generator</h1>
+  <p class="subtitle">Renders your clock SVG onto a padded, opaque square and exports every size iOS looks for. Runs entirely in this page — nothing is uploaded anywhere.</p>
+
+  <div class="panel">
+    <div id="drop">Drop a different .svg here, or click to choose one — otherwise the SBB clock is used by default</div>
+    <input type="file" id="svgFile" accept=".svg,image/svg+xml">
+
+    <div class="preview-row">
+      <canvas id="previewCanvas" width="180" height="180"></canvas>
+      <div class="preview-note">Live preview at 180×180, updates as you adjust padding and background below.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <div class="field">
+        <label for="padding">Padding (margin on each side)</label>
+        <input type="number" id="padding" value="14" min="0" max="40" step="1">
+      </div>
+      <div class="field">
+        <label for="bg">Background color</label>
+        <input type="color" id="bg" value="#000000">
+      </div>
+      <div class="field">
+        <label for="suffix">Filename suffix (for cache-busting)</label>
+        <input type="text" id="suffix" placeholder="e.g. v3">
+      </div>
+    </div>
+    <label>Sizes to export</label>
+    <div class="sizes">
+      <label class="size-chip"><input type="checkbox" value="180" checked> 180×180</label>
+      <label class="size-chip"><input type="checkbox" value="152" checked> 152×152</label>
+      <label class="size-chip"><input type="checkbox" value="167" checked> 167×167</label>
+      <label class="size-chip"><input type="checkbox" value="120" checked> 120×120</label>
+    </div>
+  </div>
+
+  <button id="generateBtn">Generate &amp; download PNGs</button>
+  <div class="status" id="status"></div>
+
+  <div class="filenames">
+    Files download as <code>apple-touch-icon[-suffix].png</code>, <code>apple-touch-icon[-suffix]-152x152.png</code>, etc. — matching what
+    <code>&lt;link rel="apple-touch-icon"&gt;</code> tags expect.
+  </div>
+</div>
+
+<script>
+// The SBB clock face + hands, taken directly from the sbbUhr-1.3.js c.svg object,
+// combined into one static SVG with the hands posed at a fixed 10:10-ish position
+// (the same source used for every icon generated in this conversation).
+const DEFAULT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 112" width="112" height="112">
+  <g>
+    <circle fill="#ffffff" cx="56" cy="56" r="52.5"/>
+    <path fill="#767676" d="M56,3.5c28.995,0,52.5,23.505,52.5,52.5S84.995,108.5,56,108.5S3.5,84.995,3.5,56 S27.005,3.5,56,3.5 M56,2C26.224,2,2,26.224,2,56s24.224,54,54,54s54-24.224,54-54S85.776,2,56,2L56,2z"/>
+    <path fill="#1e1e1e" d="M51.627,7.693l0.366,3.481L50.6,11.32l-0.366-3.481L51.627,7.693z M54.25,19.5h3.5v-12h-3.5V19.5z M54.25,104.5h3.5v-12h-3.5V104.5z M72.734,23.515l3.031,1.75l6-10.392l-3.031-1.75L72.734,23.515z M30.234,97.127l3.031,1.75 l6-10.392l-3.031-1.75L30.234,97.127z M88.485,39.266l10.392-6l-1.75-3.031l-10.392,6L88.485,39.266z M23.515,72.734l-10.392,6 l1.75,3.031l10.392-6L23.515,72.734z M92.5,54.25v3.5h12v-3.5H92.5z M19.5,54.25h-12v3.5h12V54.25z M86.735,75.766l10.392,6 l1.75-3.031l-10.392-6L86.735,75.766z M25.265,36.234l-10.392-6l-1.75,3.031l10.392,6L25.265,36.234z M72.734,88.485l6,10.392 l3.031-1.75l-6-10.392L72.734,88.485z M30.234,14.873l6,10.392l3.031-1.75l-6-10.392L30.234,14.873z M60.008,11.173L61.4,11.32 l0.366-3.481l-1.392-0.146L60.008,11.173z M50.234,104.161l1.392,0.146l0.366-3.481L50.6,100.68L50.234,104.161z M64.671,11.838 l1.369,0.291l0.728-3.424l-1.369-0.291L64.671,11.838z M45.232,103.295l1.369,0.291l0.728-3.424l-1.369-0.291L45.232,103.295z M69.24,12.986l1.331,0.433l1.082-3.329l-1.331-0.433L69.24,12.986z M40.347,101.91l1.331,0.433l1.082-3.329l-1.331-0.433 L40.347,101.91z M76.366,11.978l-1.279-0.569l-1.424,3.197l1.279,0.569L76.366,11.978z M35.634,100.022l1.279,0.569l1.424-3.197 l-1.279-0.569L35.634,100.022z M81.884,19.183l1.133,0.823l2.057-2.832l-1.133-0.823L81.884,19.183z M26.926,94.826l1.133,0.823 l2.057-2.832l-1.133-0.823L26.926,94.826z M88.973,20.426l-1.04-0.937l-2.342,2.601l1.04,0.937L88.973,20.426z M23.027,91.574 l1.04,0.937l2.342-2.601l-1.04-0.937L23.027,91.574z M92.511,24.067l-0.937-1.04l-2.601,2.342l0.937,1.04L92.511,24.067z M19.489,87.933l0.937,1.04l2.601-2.342l-0.937-1.04L19.489,87.933z M92.817,30.116l2.832-2.057l-0.823-1.133l-2.832,2.057 L92.817,30.116z M19.183,81.884l-2.832,2.057l0.823,1.133l2.832-2.057L19.183,81.884z M97.394,38.336l3.197-1.424l-0.569-1.279 l-3.197,1.424L97.394,38.336z M14.606,73.664l-3.197,1.424l0.569,1.279l3.197-1.424L14.606,73.664z M99.014,42.76l3.329-1.082 l-0.433-1.331l-3.329,1.082L99.014,42.76z M12.986,69.24l-3.329,1.082l0.433,1.331l3.329-1.082L12.986,69.24z M100.162,47.329 l3.424-0.728l-0.291-1.369l-3.424,0.728L100.162,47.329z M11.838,64.671l-3.424,0.728l0.291,1.369l3.424-0.728L11.838,64.671z M100.827,51.992l3.481-0.366l-0.146-1.392L100.68,50.6L100.827,51.992z M11.173,60.008l-3.481,0.366l0.146,1.392L11.32,61.4 L11.173,60.008z M100.68,61.4l3.481,0.366l0.146-1.392l-3.481-0.366L100.68,61.4z M11.32,50.6l-3.481-0.366l-0.146,1.392 l3.481,0.366L11.32,50.6z M99.871,66.041l3.424,0.728l0.291-1.369l-3.424-0.728L99.871,66.041z M12.129,45.959l-3.424-0.728 l-0.291,1.369l3.424,0.728L12.129,45.959z M98.581,70.571l3.329,1.082l0.433-1.331l-3.329-1.082L98.581,70.571z M13.419,41.428 l-3.329-1.082l-0.433,1.331l3.329,1.082L13.419,41.428z M96.825,74.943l3.197,1.424l0.569-1.279l-3.197-1.424L96.825,74.943z M15.175,37.057l-3.197-1.424l-0.569,1.279l3.197,1.424L15.175,37.057z M91.994,83.017l2.832,2.057l0.823-1.133l-2.832-2.057 L91.994,83.017z M20.006,28.983l-2.832-2.057l-0.823,1.133l2.832,2.057L20.006,28.983z M88.973,86.631l2.601,2.342l0.937-1.04 l-2.601-2.342L88.973,86.631z M23.027,25.369l-2.601-2.342l-0.937,1.04l2.601,2.342L23.027,25.369z M85.591,89.91l2.342,2.601 l1.04-0.937l-2.342-2.601L85.591,89.91z M23.027,20.426l2.342,2.601l1.04-0.937l-2.342-2.601L23.027,20.426z M81.884,92.817 l2.057,2.832l1.133-0.823l-2.057-2.832L81.884,92.817z M26.926,17.174l2.057,2.832l1.133-0.823l-2.057-2.832L26.926,17.174z M73.664,97.394l1.424,3.197l1.279-0.569l-1.424-3.197L73.664,97.394z M38.336,14.606l-1.424-3.197l-1.279,0.569l1.424,3.197 L38.336,14.606z M69.24,99.014l1.082,3.329l1.331-0.433l-1.082-3.329L69.24,99.014z M40.347,10.09l1.082,3.329l1.331-0.433 l-1.082-3.329L40.347,10.09z M64.671,100.162l0.728,3.424l1.369-0.291l-0.728-3.424L64.671,100.162z M45.232,8.705l0.728,3.424 l1.369-0.291l-0.728-3.424L45.232,8.705z M60.008,100.827l0.366,3.481l1.392-0.146L61.4,100.68L60.008,100.827z"/>
+  </g>
+  <g transform="rotate(305 56 56)">
+    <polygon fill="#000000" points="59.2,68 52.8,68 53.4,24 58.6,24"/>
+  </g>
+  <g transform="rotate(60 56 56)">
+    <polygon fill="#000000" points="58.6,68 53.4,68 54.2,10 57.8,10"/>
+  </g>
+  <g transform="rotate(120 56 56)">
+    <path fill="#eb0000" d="M61.25,24.8c0-2.899-2.351-5.25-5.25-5.25s-5.25,2.351-5.25,5.25c0,2.66,1.985,4.834,4.55,5.179V72.5h1.4V29.979C59.265,29.634,61.25,27.46,61.25,24.8z"/>
+  </g>
+</svg>`;
+
+let currentSvgText = DEFAULT_SVG;
+let currentImage = null;
+
+const filenameTemplates = {
+  180: (s) => `apple-touch-icon${s}.png`,
+  152: (s) => `apple-touch-icon${s}-152x152.png`,
+  167: (s) => `apple-touch-icon${s}-167x167.png`,
+  120: (s) => `apple-touch-icon${s}-120x120.png`,
+};
+
+function loadImageFromSvgText(svgText) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgText);
+  });
+}
+
+// Draws the artwork onto a square canvas of the given size, with padding
+// and background color, using the highest-quality source available.
+function renderToCanvas(size, paddingRatio, bgHex) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  ctx.fillStyle = bgHex;
+  ctx.fillRect(0, 0, size, size);
+
+  const inner = Math.round(size * (1 - 2 * paddingRatio));
+  const offset = Math.round((size - inner) / 2);
+  ctx.drawImage(currentImage, offset, offset, inner, inner);
+
+  return canvas;
+}
+
+function readControls() {
+  const padding = Math.max(0, Math.min(40, parseFloat(document.getElementById("padding").value) || 0)) / 100;
+  const bg = document.getElementById("bg").value;
+  const suffixRaw = document.getElementById("suffix").value.trim();
+  const suffix = suffixRaw ? `-${suffixRaw}` : "";
+  const sizes = Array.from(document.querySelectorAll(".sizes input:checked")).map(cb => parseInt(cb.value, 10));
+  return { padding, bg, suffix, sizes };
+}
+
+function updatePreview() {
+  if (!currentImage) return;
+  const { padding, bg } = readControls();
+  const previewCanvas = document.getElementById("previewCanvas");
+  const rendered = renderToCanvas(180, padding, bg);
+  const ctx = previewCanvas.getContext("2d");
+  ctx.clearRect(0, 0, 180, 180);
+  ctx.drawImage(rendered, 0, 0, 180, 180);
+}
+
+function downloadCanvas(canvas, filename) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      resolve();
+    }, "image/png");
+  });
+}
+
+async function generateAll() {
+  const btn = document.getElementById("generateBtn");
+  const status = document.getElementById("status");
+  const { padding, bg, suffix, sizes } = readControls();
+
+  if (sizes.length === 0) {
+    status.textContent = "Select at least one size.";
+    return;
+  }
+
+  btn.disabled = true;
+  for (const size of sizes) {
+    status.textContent = `Generating ${size}×${size}…`;
+    const canvas = renderToCanvas(size, padding, bg);
+    const nameFn = filenameTemplates[size] || ((s) => `apple-touch-icon${s}-${size}x${size}.png`);
+    await downloadCanvas(canvas, nameFn(suffix));
+    await new Promise(r => setTimeout(r, 150)); // small gap so the browser doesn't block multiple downloads
+  }
+  status.textContent = `Done — ${sizes.length} file(s) downloaded.`;
+  btn.disabled = false;
+}
+
+function initWithSvgText(svgText) {
+  currentSvgText = svgText;
+  loadImageFromSvgText(svgText).then((img) => {
+    currentImage = img;
+    updatePreview();
+  }).catch(() => {
+    document.getElementById("status").textContent = "Couldn't parse that SVG.";
+  });
+}
+
+// Wire up controls
+["padding", "bg", "suffix"].forEach(id => {
+  document.getElementById(id).addEventListener("input", updatePreview);
+});
+document.querySelectorAll(".sizes input").forEach(cb => cb.addEventListener("change", updatePreview));
+document.getElementById("generateBtn").addEventListener("click", generateAll);
+
+// Drag & drop / file picker for a custom SVG
+const drop = document.getElementById("drop");
+const fileInput = document.getElementById("svgFile");
+drop.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = () => initWithSvgText(reader.result);
+    reader.readAsText(file);
+  }
+});
+["dragenter", "dragover"].forEach(evt =>
+  drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.add("drag"); })
+);
+["dragleave", "drop"].forEach(evt =>
+  drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.remove("drag"); })
+);
+drop.addEventListener("drop", (e) => {
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = () => initWithSvgText(reader.result);
+    reader.readAsText(file);
+  }
+});
+
+// Initial render with the default SBB clock SVG
+initWithSvgText(DEFAULT_SVG);
+</script>
+</body>
+</html>
