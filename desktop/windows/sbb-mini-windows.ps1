@@ -1,8 +1,14 @@
 # SBB Mini Clock for Windows: a small, frameless SBB clock that stays on top of all windows.
 # Start it with "SBB Mini Clock (Windows).cmd".
 # Drag to move, mouse wheel to resize, right-click for sizes and Quit. Position and size are remembered.
+# Written in PowerShell with WPF, the window toolkit built into Windows: nothing to install.
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
+# --- Window and clock face ---
+# The window in XAML: borderless, transparent, always on top and not in the taskbar. The clock is the SBB
+# face as vector paths on a 112 x 112 canvas (the same drawing as sbb-clock.svg); the Viewbox scales it to
+# any window size. Each hand has a RotateTransform around the centre (56, 56) that the timer below turns.
+# The right-click menu items carry their action in Tag: a size in px, or "quit".
 $xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -41,19 +47,23 @@ $xaml = @'
 </Window>
 '@
 
+# Build the window from the XAML and get the three hands by name
 $window = [Windows.Markup.XamlReader]::Parse($xaml)
 $hourHand = $window.FindName('HourHand')
 $minuteHand = $window.FindName('MinuteHand')
 $secondHand = $window.FindName('SecondHand')
 
+# --- Hands ---
 # Same movement as sbbUhr-1.3.js: seconds hand turns in 58.5 s, minutes and hours hands jump with an elastic easing
 function Ease($t, $b, $c, $d) {
+	# t: ms into the current minute, b: start angle, c: degrees to move, d: duration of the movement in ms
 	$t /= $d
 	if ($t -lt 1) { return $c * [Math]::Pow(2, -10 * $t) * [Math]::Sin(($t * $d - 2) * (2 * [Math]::PI) / 300) * 1.5 + $c + $b }
 	return $b + $c
 }
 $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(33)
+# About 30 times a second: set each hand's angle from the current time (0 degrees = 12 o'clock)
 $timer.Add_Tick({
 	$d = Get-Date
 	$mss = $d.Second * 1000 + $d.Millisecond
@@ -62,6 +72,8 @@ $timer.Add_Tick({
 	$hourHand.Angle = Ease $mss ($d.Hour * 30 + $d.Minute / 2 - .5) .5 2000
 })
 
+# --- Size, position and mouse ---
+# Sizes are kept between 32 and 600 px
 function Set-ClockSize($size) {	# Resize around the clock's center
 	$size = [Math]::Max(32, [Math]::Min(600, $size))
 	$window.Left += ($window.Width - $size) / 2
@@ -71,10 +83,12 @@ function Set-ClockSize($size) {	# Resize around the clock's center
 
 # Remember position and size between runs
 $settingsFile = Join-Path $env:APPDATA 'SBBMiniClock\settings.json'
+# Default: top-right corner of the screen, 16 px from the edges (WorkArea leaves out the taskbar)
 $work = [Windows.SystemParameters]::WorkArea
 $window.Left = $work.Right - $window.Width - 16
 $window.Top = $work.Top + 16
 if (Test-Path $settingsFile) {
+	# Use the saved values only if the clock fits on the screens as they are now (a monitor may have been unplugged)
 	try {
 		$s = Get-Content $settingsFile -Raw | ConvertFrom-Json
 		$vLeft = [Windows.SystemParameters]::VirtualScreenLeft
@@ -87,18 +101,22 @@ if (Test-Path $settingsFile) {
 	} catch { }
 }
 $window.Add_Closing({
+	# Save position and size when the clock closes
 	New-Item -ItemType Directory -Force -Path (Split-Path $settingsFile) | Out-Null
 	@{ Left = $window.Left; Top = $window.Top; Size = $window.Width } | ConvertTo-Json | Set-Content $settingsFile
 })
 
-$window.Add_MouseLeftButtonDown({ $window.DragMove() })
+$window.Add_MouseLeftButtonDown({ $window.DragMove() })	# Left button: move the window while the mouse moves
+# Mouse wheel: 8 px bigger or smaller per notch
 $window.Add_MouseWheel({ param($sender, $e) Set-ClockSize ($window.Width + [Math]::Sign($e.Delta) * 8) })
 $window.ContextMenu.AddHandler([Windows.Controls.MenuItem]::ClickEvent, [Windows.RoutedEventHandler]{
+	# One handler for all menu items: read the clicked item's Tag
 	param($sender, $e)
 	$tag = $e.OriginalSource.Tag
 	if ($tag -eq 'quit') { $window.Close() }
 	elseif ($tag) { Set-ClockSize ([double]$tag) }
 })
 
-$timer.Start()
-[void]$window.ShowDialog()
+# --- Start ---
+$timer.Start()	# Start turning the hands
+[void]$window.ShowDialog()	# Show the clock and handle events until Quit
