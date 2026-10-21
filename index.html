@@ -83,7 +83,6 @@
 			myClock = new sbbUhr("sbb_uhr_container", true, 60); // create new clock object sbbUhr([ID of container], [default = false, true = dark background, false = light background], Refresh rate in Frames per Second [default = as many as possible])
 			myClock.start(); // start clock
 			//myClock.stop(); // call to stop clock.
-			window.addEventListener("resize", myClock.resize);
 
 			// Picture-in-Picture: the clock is drawn on a canvas and streamed into a video PiP, which has no title bar.
 			// Document PiP (real clock in an always-on-top window, but with a browser title bar) is only the fallback.
@@ -108,7 +107,6 @@
 				doc.body.appendChild(box);
 				var pipClock = new sbbUhr(box, true, 60);
 				pipClock.start();
-				pipWindow.addEventListener("resize", pipClock.resize);
 				pipWindow.addEventListener("pagehide", function() {
 					pipClock.stop();
 					pipWindow = null;

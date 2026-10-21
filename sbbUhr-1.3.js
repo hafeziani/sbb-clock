@@ -84,6 +84,7 @@ function sbbUhr(container, background = false, fps = false) {
 		c.size = Math.min(c.container.clientWidth, c.container.clientHeight);
 		c.wrapper.style.width = c.wrapper.style.height = c.size + "px";
 	}
+	if (c.win.ResizeObserver) new c.win.ResizeObserver(c.resize).observe(c.container);	//Follow size changes of the container automatically
 	c.start = function () {	//function start can be called to start the clock
 		c.stop();
 		c.run();
