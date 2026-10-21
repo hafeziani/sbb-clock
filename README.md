@@ -18,8 +18,6 @@ optional `fps` set the refreshrate of the clock. Must be higher than 10 frames/s
 
 `myClock.stop()` will stop the clock.
 
-`myClock.resize()` re-fits the clock after its container changed size.
-
 `myClock.angles(date)` returns the hand angles `{s, m, h}` in degrees for the given `Date`.
 
 ## Picture-in-Picture
