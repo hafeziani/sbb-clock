@@ -27,3 +27,9 @@ optional `fps` set the refreshrate of the clock. Must be higher than 10 frames/s
 
 ## Install as an app
 The page has a web app manifest, so it can be installed (Chrome: ⋮ → Cast, save and share → Install page as app; Edge: ⋯ → Apps → Install this site as an app). The installed clock opens in its own window that can be resized much smaller than a PiP window, and the clock fills it. On Windows, PowerToys *Always On Top* (Win + Ctrl + T) keeps it above other windows.
+
+## Mini desktop clock
+The `desktop` folder has a tiny frameless clock that stays on top of all windows and can be made smaller than any browser window (drag to move, right-click for sizes and Quit).
+
+- Mac: double-click `SBB Mini Clock (Mac).command` (the first time: right-click → Open).
+- Windows: double-click `SBB Mini Clock (Windows).cmd`. Needs PowerShell in full language mode, so it won't run on PCs where a company policy restricts PowerShell.
