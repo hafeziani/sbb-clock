@@ -7,6 +7,8 @@
 	<title>SBB Uhr</title>
 	<!-- <link rel="icon" type="image/png" href="sbb-clock-favicon.png"> -->
 	<link rel="icon" type="image/svg+xml" href="sbb-clock.svg">
+	<link rel="manifest" href="manifest.webmanifest">
+	<meta name="theme-color" content="#000000">
 
 	
 	<link rel="apple-touch-icon" href="files/apple-touch-icon.png">
@@ -39,17 +41,156 @@
 			width: 70vmin;
 			height: 70vmin;
 		}
+		#pip_button {
+			position: fixed;
+			right: 16px;
+			bottom: 16px;
+			width: 44px;
+			height: 44px;
+			padding: 10px;
+			border: 0;
+			border-radius: 50%;
+			background: rgba(255,255,255,.12);
+			color: #fff;
+			cursor: pointer;
+			opacity: .4;
+			transition: opacity .2s, background .2s;
+		}
+		#pip_button:hover, #pip_button:focus-visible {
+			opacity: 1;
+			background: rgba(255,255,255,.22);
+		}
+		#pip_button[hidden] { display: none; }
+		#pip_button svg { display: block; width: 100%; height: 100%; }
+		#pip_video { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+		/* Installed as an app: the clock fills its (resizable, small) window, no PiP button */
+		@media (display-mode: standalone), (display-mode: minimal-ui) {
+			#sbb_uhr_container { width: 96vmin; height: 96vmin; }
+			#pip_button { display: none; }
+		}
 	</style>
 	</head>
 
 	<body>
 		<!-- Container div can have any size and proportion. The Clock will fill to the shortest length. -->
 		<div id="sbb_uhr_container"></div>
+		<button id="pip_button" type="button" title="Picture-in-Picture (P)" aria-label="Picture-in-Picture" hidden>
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="12" width="7" height="5" rx="1" fill="currentColor"/></svg>
+		</button>
+		<video id="pip_video" muted playsinline></video>
 		<script type="text/javascript">
 			var myClock; // define Clock object
 			myClock = new sbbUhr("sbb_uhr_container", true, 60); // create new clock object sbbUhr([ID of container], [default = false, true = dark background, false = light background], Refresh rate in Frames per Second [default = as many as possible])
 			myClock.start(); // start clock
 			//myClock.stop(); // call to stop clock.
+			window.addEventListener("resize", myClock.resize);
+
+			// Picture-in-Picture: the clock is drawn on a canvas and streamed into a video PiP, which has no title bar.
+			// Document PiP (real clock in an always-on-top window, but with a browser title bar) is only the fallback.
+			var pipButton = document.getElementById("pip_button");
+			var pipVideo = document.getElementById("pip_video");
+			var pipWindow = null, stopTicker = null;
+			var hasDocPip = "documentPictureInPicture" in window;
+			var hasVideoPip = document.pictureInPictureEnabled && "captureStream" in HTMLCanvasElement.prototype;
+			pipButton.hidden = !(hasDocPip || hasVideoPip);
+
+			async function openDocumentPip() {
+				pipWindow = await documentPictureInPicture.requestWindow({ width: 260, height: 260 });
+				var doc = pipWindow.document;
+				doc.title = "SBB Uhr";
+				var style = doc.createElement("style");
+				style.textContent = "html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }"
+					+ "body { display: flex; align-items: center; justify-content: center; }"
+					+ "#pip_container { width: 92vmin; height: 92vmin; }";
+				doc.head.appendChild(style);
+				var box = doc.createElement("div");
+				box.id = "pip_container";
+				doc.body.appendChild(box);
+				var pipClock = new sbbUhr(box, true, 60);
+				pipClock.start();
+				pipWindow.addEventListener("resize", pipClock.resize);
+				pipWindow.addEventListener("pagehide", function() {
+					pipClock.stop();
+					pipWindow = null;
+				});
+			}
+
+			function loadImage(svg) {
+				var img = new Image();
+				img.src = "data:image/svg+xml," + encodeURIComponent(svg);
+				return img.decode().then(function() { return img; });
+			}
+
+			var pipImages = hasVideoPip ? Promise.all([myClock.svg.faceDark, myClock.svg.hours, myClock.svg.minutes, myClock.svg.seconds].map(loadImage)) : null;
+
+			function startTicker(fn, fps) {	// Timers in a worker keep running at full speed while the tab is in the background
+				var worker = null, id = null;
+				var fallback = function() {	// Plain timer if the worker can't be created or fails to load
+					if (worker) worker.terminate();
+					worker = null;
+					id = setInterval(fn, 1000 / fps);
+				};
+				try {
+					worker = new Worker(URL.createObjectURL(new Blob(["setInterval(function() { postMessage(0); }, " + (1000 / fps) + ");"], { type: "text/javascript" })));
+					worker.onmessage = fn;
+					worker.onerror = fallback;
+				} catch (e) {
+					fallback();
+				}
+				return function() {
+					if (worker) worker.terminate();
+					clearInterval(id);
+				};
+			}
+
+			async function openVideoPip() {
+				var size = 512;
+				var canvas = document.createElement("canvas");
+				canvas.width = canvas.height = size;
+				var ctx = canvas.getContext("2d");
+				var imgs = await pipImages;
+				var draw = function() {
+					var a = myClock.angles(new Date());
+					ctx.fillStyle = "#000";
+					ctx.fillRect(0, 0, size, size);
+					ctx.drawImage(imgs[0], 0, 0, size, size);
+					[a.h, a.m, a.s].forEach(function(deg, i) {
+						ctx.save();
+						ctx.translate(size / 2, size / 2);
+						ctx.rotate(deg * Math.PI / 180);
+						ctx.drawImage(imgs[i + 1], -size / 2, -size / 2, size, size);
+						ctx.restore();
+					});
+				};
+				draw();
+				stopTicker = startTicker(draw, 30);
+				pipVideo.srcObject = canvas.captureStream(30);
+				await pipVideo.play();
+				await pipVideo.requestPictureInPicture();
+			}
+
+			pipVideo.addEventListener("leavepictureinpicture", function() {
+				if (stopTicker) stopTicker();
+				stopTicker = null;
+				pipVideo.pause();
+				pipVideo.srcObject = null;
+			});
+
+			async function togglePip() {
+				try {
+					if (pipWindow) return pipWindow.close();
+					if (document.pictureInPictureElement) return await document.exitPictureInPicture();
+					if (hasVideoPip) await openVideoPip();
+					else await openDocumentPip();
+				} catch (e) {
+					console.log("Picture-in-Picture failed:", e);
+				}
+			}
+
+			pipButton.addEventListener("click", togglePip);
+			document.addEventListener("keydown", function(e) {
+				if ((e.key === "p" || e.key === "P") && !e.ctrlKey && !e.metaKey && !e.altKey) togglePip();
+			});
 		</script>
 	</body>
 </html>

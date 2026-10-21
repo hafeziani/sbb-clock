@@ -4,8 +4,9 @@
  * Apache-2.0 License
  */
 function sbbUhr(container, background = false, fps = false) {
-	//Check if selected container is valid
-	if (!document.getElementById(container)) return console.log("Select exaclty 1 container to place the clock inside!"), !1;
+	//Check if selected container is valid (id string or DOM element, e.g. inside a Picture-in-Picture window)
+	if (typeof container === "string") container = document.getElementById(container);
+	if (!container) return console.log("Select exaclty 1 container to place the clock inside!"), !1;
 	if(typeof background == "number") {
 		fps = background;
 		background = false;
@@ -14,7 +15,9 @@ function sbbUhr(container, background = false, fps = false) {
 	if (typeof fps !== "number") fps = false;
 	//Construct SBB Uhr Object
 	var c = this;
-	c.container = document.getElementById(container);
+	c.container = container;
+	c.doc = container.ownerDocument;	//Document and window owning the container, so the clock also animates inside a PiP window
+	c.win = c.doc.defaultView;
 	c.cycleDur = 58.5; // Seconds Hand Cycle duration in Seconds
 	c.easingDur = 2000; //Easing Time in Milliseconds
 	c.date, c.anim, c.sDeg, c.mDeg, c.hDeg, c.rTime = {};
@@ -39,13 +42,13 @@ function sbbUhr(container, background = false, fps = false) {
 		seconds: '<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 112 112" enable-background="new 0 0 112 112" xml:space="preserve"><path fill="rgba(235,0,0,1)" d="M61.25,24.8c0-2.899-2.351-5.25-5.25-5.25s-5.25,2.351-5.25,5.25c0,2.66,1.985,4.834,4.55,5.179V72.5h1.4V29.979C59.265,29.634,61.25,27.46,61.25,24.8z"/></svg>'
 	}
 	c.createComponent = function(id, svg) { 	//Prototype DOM object for face and hands
-		var div = document.createElement("div");
+		var div = c.doc.createElement("div");
 		div.setAttribute("id", id);
 		div.setAttribute("style", "width: 100%; height: 100%; position: absolute; top: 0; left: 0; border: 0;");
 		div.innerHTML = "<img alt='" + id + "' src='data:image/svg+xml," + encodeURI(svg) + "' />";
 		return div;
 	}
-	c.wrapper = document.createElement("div");	//Build wrapper element, set attributes and inline style
+	c.wrapper = c.doc.createElement("div");	//Build wrapper element, set attributes and inline style
 	c.wrapper.setAttribute("id", "sbb_uhr_wrapper");
 	c.wrapper.setAttribute("style", "display:block; position: absolute; width: " + c.size + "px; height: " + c.size + "px; overflow: hidden; margin: 0;");
 	c.face = c.wrapper.appendChild(c.createComponent("sbb_uhr_face", background ? c.svg.faceDark : c.svg.face));	//Build Face and Hands DOM Elements
@@ -53,28 +56,40 @@ function sbbUhr(container, background = false, fps = false) {
 	c.minutesHand = c.wrapper.appendChild(c.createComponent("sbb_uhr_minutes", c.svg.minutes));
 	c.secondsHand = c.wrapper.appendChild(c.createComponent("sbb_uhr_seconds", c.svg.seconds));
 	c.container.appendChild(c.wrapper);
+	c.angles = function(date) {	//Returns the angles in degrees of the seconds, minutes and hours hand for the given time
+		var t = {
+			h: date.getHours(),
+			m: date.getMinutes(),
+			s: date.getSeconds(),
+			ms: date.getMilliseconds(),
+			mss: date.getSeconds() * 1000 + date.getMilliseconds()
+		};
+		return {
+			s: Math.min(t.s * (360 / c.cycleDur) + (t.ms * .006), 360),
+			m: c.easeOutElastic(t.mss, (t.m * 6)-6, 6, c.easingDur),
+			h: c.easeOutElastic(t.mss, (t.h * 30) + (t.m / 2)-.5, .5, c.easingDur)
+		};
+	}
 	c.run = function() {	//Function gets called every frame, gets the current time and sets the correct angles to the hands
 		c.date = new Date();
-		c.rTime = {
-			h: c.date.getHours(),
-			m: c.date.getMinutes(),
-			s: c.date.getSeconds(),
-			ms: c.date.getMilliseconds(),
-			mss: c.date.getSeconds() * 1000 + c.date.getMilliseconds()
-		};
-		c.sDeg = c.rotateHand(c.secondsHand, c.sDeg, Math.min(c.rTime.s * (360 / c.cycleDur) + (c.rTime.ms * .006), 360));
-		c.mDeg = c.rotateHand(c.minutesHand, c.mDeg, c.easeOutElastic(c.rTime.mss , (c.rTime.m * 6)-6 , 6 , c.easingDur));
-		c.hDeg = c.rotateHand(c.hoursHand, c.hDeg, c.easeOutElastic(c.rTime.mss, (c.rTime.h * 30) + (c.rTime.m / 2)-.5 , .5 , c.easingDur));
-		c.fps = setTimeout(function() {
-			c.anim = requestAnimationFrame(c.run);
+		var a = c.angles(c.date);
+		c.sDeg = c.rotateHand(c.secondsHand, c.sDeg, a.s);
+		c.mDeg = c.rotateHand(c.minutesHand, c.mDeg, a.m);
+		c.hDeg = c.rotateHand(c.hoursHand, c.hDeg, a.h);
+		c.fps = c.win.setTimeout(function() {
+			c.anim = c.win.requestAnimationFrame(c.run);
 		}, !fps ? 0 : 1000/fps);
+	}
+	c.resize = function() {	//function resize can be called after the container changed its size
+		c.size = Math.min(c.container.clientWidth, c.container.clientHeight);
+		c.wrapper.style.width = c.wrapper.style.height = c.size + "px";
 	}
 	c.start = function () {	//function start can be called to start the clock
 		c.stop();
 		c.run();
 	}
 	c.stop = function () {	//function stop can be called to stop the clock
-		clearTimeout(c.fps);
-		cancelAnimationFrame(c.anim);
+		c.win.clearTimeout(c.fps);
+		c.win.cancelAnimationFrame(c.anim);
 	}
 }
